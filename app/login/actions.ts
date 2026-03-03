@@ -13,7 +13,7 @@ export async function signIn(formData: FormData) {
   });
 
   if (error) {
-    return { error: error.message };
+    redirect(`/login?error=${encodeURIComponent(error.message)}`);
   }
 
   revalidatePath("/", "layout");
@@ -29,12 +29,12 @@ export async function signUp(formData: FormData) {
   });
 
   if (error) {
-    return { error: error.message };
+    redirect(`/login?mode=signup&error=${encodeURIComponent(error.message)}`);
   }
 
-  // Supabase вернул user без сессии — значит требуется подтверждение email
+  // Supabase вернул user без сессии — требуется подтверждение email
   if (data.user && !data.session) {
-    return { confirm: true };
+    redirect("/login?confirm=1");
   }
 
   revalidatePath("/", "layout");
