@@ -1,28 +1,33 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
+import { useActionState } from "react";
 import { signIn, signUp } from "./actions";
+
+type ActionState = { error?: string; confirm?: boolean } | null;
 
 export default function LoginPage() {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
-  const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setError(null);
-    const formData = new FormData(e.currentTarget);
+  const [signInState, signInAction, signInPending] = useActionState<ActionState, FormData>(
+    async (_prev, formData) => {
+      const result = await signIn(formData);
+      return result ?? null;
+    },
+    null
+  );
 
-    startTransition(async () => {
-      const result = mode === "signin"
-        ? await signIn(formData)
-        : await signUp(formData);
+  const [signUpState, signUpAction, signUpPending] = useActionState<ActionState, FormData>(
+    async (_prev, formData) => {
+      const result = await signUp(formData);
+      return result ?? null;
+    },
+    null
+  );
 
-      if (result?.error) {
-        setError(result.error);
-      }
-    });
-  }
+  const isPending = signInPending || signUpPending;
+  const error = mode === "signin" ? signInState?.error : signUpState?.error;
+  const showConfirm = signUpState?.confirm;
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
@@ -40,88 +45,139 @@ export default function LoginPage() {
 
         {/* Card */}
         <div className="bg-white rounded-xl border border-gray-100 p-7">
-          <div className="mb-6">
-            <h1 className="text-[15px] font-semibold text-gray-900">
-              {mode === "signin" ? "Вход в систему" : "Регистрация"}
-            </h1>
-            <p className="text-[12px] text-gray-400 mt-1">
-              {mode === "signin"
-                ? "Введите email и пароль для входа"
-                : "Создайте учётную запись"}
-            </p>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-[11px] font-medium text-gray-500 mb-1.5">
-                Email
-              </label>
-              <input
-                name="email"
-                type="email"
-                required
-                autoComplete="email"
-                placeholder="you@company.ru"
-                className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-gray-400 focus:bg-white transition-colors"
-              />
+          {showConfirm ? (
+            // Email confirmation message
+            <div className="space-y-4 text-center">
+              <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center mx-auto">
+                <svg className="w-5 h-5 text-green-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </div>
+              <div>
+                <h1 className="text-[15px] font-semibold text-gray-900">Проверьте почту</h1>
+                <p className="text-[12px] text-gray-500 mt-1 leading-relaxed">
+                  Мы отправили письмо с подтверждением.<br />
+                  Перейдите по ссылке в письме, чтобы войти.
+                </p>
+              </div>
+              <button
+                onClick={() => setMode("signin")}
+                className="text-[12px] text-gray-500 hover:text-gray-800 underline transition-colors"
+              >
+                Вернуться ко входу
+              </button>
             </div>
+          ) : (
+            <>
+              <div className="mb-6">
+                <h1 className="text-[15px] font-semibold text-gray-900">
+                  {mode === "signin" ? "Вход в систему" : "Регистрация"}
+                </h1>
+                <p className="text-[12px] text-gray-400 mt-1">
+                  {mode === "signin"
+                    ? "Введите email и пароль для входа"
+                    : "Создайте учётную запись"}
+                </p>
+              </div>
 
-            <div>
-              <label className="block text-[11px] font-medium text-gray-500 mb-1.5">
-                Пароль
-              </label>
-              <input
-                name="password"
-                type="password"
-                required
-                autoComplete={mode === "signin" ? "current-password" : "new-password"}
-                placeholder="••••••••"
-                className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-gray-400 focus:bg-white transition-colors"
-              />
-            </div>
+              {/* Sign In form */}
+              {mode === "signin" && (
+                <form action={signInAction} className="space-y-4">
+                  <Fields autoComplete="current-password" />
+                  {signInState?.error && <ErrorMessage message={signInState.error} />}
+                  <SubmitButton pending={signInPending} label="Войти" />
+                </form>
+              )}
 
-            {error && (
-              <p className="text-[12px] text-red-500 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
-                {error}
-              </p>
-            )}
+              {/* Sign Up form */}
+              {mode === "signup" && (
+                <form action={signUpAction} className="space-y-4">
+                  <Fields autoComplete="new-password" />
+                  {signUpState?.error && <ErrorMessage message={signUpState.error} />}
+                  <SubmitButton pending={signUpPending} label="Зарегистрироваться" />
+                </form>
+              )}
 
-            <button
-              type="submit"
-              disabled={isPending}
-              className="w-full bg-gray-900 text-white rounded-lg py-2.5 text-[13px] font-medium hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {isPending
-                ? "Загрузка..."
-                : mode === "signin" ? "Войти" : "Зарегистрироваться"}
-            </button>
-          </form>
-
-          <div className="mt-5 pt-5 border-t border-gray-50 text-center">
-            {mode === "signin" ? (
-              <p className="text-[12px] text-gray-400">
-                Нет аккаунта?{" "}
-                <button
-                  onClick={() => { setMode("signup"); setError(null); }}
-                  className="text-gray-700 font-medium hover:text-gray-900 transition-colors"
-                >
-                  Создать
-                </button>
-              </p>
-            ) : (
-              <p className="text-[12px] text-gray-400">
-                Уже есть аккаунт?{" "}
-                <button
-                  onClick={() => { setMode("signin"); setError(null); }}
-                  className="text-gray-700 font-medium hover:text-gray-900 transition-colors"
-                >
-                  Войти
-                </button>
-              </p>
-            )}
-          </div>
+              <div className="mt-5 pt-5 border-t border-gray-50 text-center">
+                {mode === "signin" ? (
+                  <p className="text-[12px] text-gray-400">
+                    Нет аккаунта?{" "}
+                    <button
+                      type="button"
+                      onClick={() => setMode("signup")}
+                      className="text-gray-700 font-medium hover:text-gray-900 transition-colors"
+                    >
+                      Создать
+                    </button>
+                  </p>
+                ) : (
+                  <p className="text-[12px] text-gray-400">
+                    Уже есть аккаунт?{" "}
+                    <button
+                      type="button"
+                      onClick={() => setMode("signin")}
+                      className="text-gray-700 font-medium hover:text-gray-900 transition-colors"
+                    >
+                      Войти
+                    </button>
+                  </p>
+                )}
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
+  );
+}
+
+// ── Sub-components ─────────────────────────────────────────────────────────────
+
+function Fields({ autoComplete }: { autoComplete: string }) {
+  return (
+    <>
+      <div>
+        <label className="block text-[11px] font-medium text-gray-500 mb-1.5">Email</label>
+        <input
+          name="email"
+          type="email"
+          required
+          autoComplete="email"
+          placeholder="you@company.ru"
+          className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-gray-400 focus:bg-white transition-colors"
+        />
+      </div>
+      <div>
+        <label className="block text-[11px] font-medium text-gray-500 mb-1.5">Пароль</label>
+        <input
+          name="password"
+          type="password"
+          required
+          autoComplete={autoComplete}
+          placeholder="••••••••"
+          className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-gray-400 focus:bg-white transition-colors"
+        />
+      </div>
+    </>
+  );
+}
+
+function SubmitButton({ pending, label }: { pending: boolean; label: string }) {
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="w-full bg-gray-900 text-white rounded-lg py-2.5 text-[13px] font-medium hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+    >
+      {pending ? "Загрузка..." : label}
+    </button>
+  );
+}
+
+function ErrorMessage({ message }: { message: string }) {
+  return (
+    <p className="text-[12px] text-red-500 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+      {message}
+    </p>
   );
 }

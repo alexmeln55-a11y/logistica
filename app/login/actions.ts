@@ -23,13 +23,18 @@ export async function signIn(formData: FormData) {
 export async function signUp(formData: FormData) {
   const supabase = await createClient();
 
-  const { error } = await supabase.auth.signUp({
+  const { data, error } = await supabase.auth.signUp({
     email: formData.get("email") as string,
     password: formData.get("password") as string,
   });
 
   if (error) {
     return { error: error.message };
+  }
+
+  // Supabase вернул user без сессии — значит требуется подтверждение email
+  if (data.user && !data.session) {
+    return { confirm: true };
   }
 
   revalidatePath("/", "layout");
