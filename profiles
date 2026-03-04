@@ -1,0 +1,12 @@
+create table if not exists profiles (
+  id uuid references auth.users(id) primary key,
+  email text,
+  full_name text,
+  role text default 'admin',
+  created_at timestamptz default now()
+);
+
+insert into profiles (id, email, role)
+select id, email, 'admin'
+from auth.users
+on conflict (id) do nothing;
