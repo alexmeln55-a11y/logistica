@@ -4,7 +4,7 @@ import { useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { logout } from "@/app/login/actions";
-import type { UserRole } from "@/lib/supabase/profile";
+import type { UserRole } from "@/lib/auth/types";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -14,9 +14,13 @@ type SettingsTab = "organization" | "users" | "departments";
 
 export function AppShell({
   role,
+  fullName,
+  email,
   children,
 }: {
   role: UserRole;
+  fullName: string | null;
+  email: string;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -74,8 +78,8 @@ export function AppShell({
           )}
         </nav>
 
-        {/* Settings (admin only) */}
-        {role === "admin" && (
+        {/* Settings (owner + admin) */}
+        {(role === "owner" || role === "admin") && (
           <div className="px-3 pb-4 border-t border-gray-100 pt-3">
             <button
               onClick={() => setSettingsExpanded((v) => !v)}
@@ -146,7 +150,7 @@ export function AppShell({
 
       {/* ── Main ────────────────────────────────────────────────────────── */}
       <main className="flex-1 flex flex-col overflow-hidden">
-        <Topbar />
+        <Topbar role={role} fullName={fullName} email={email} />
         <div className="flex-1 overflow-y-auto p-6">{children}</div>
       </main>
     </div>
@@ -155,7 +159,21 @@ export function AppShell({
 
 // ── Topbar ─────────────────────────────────────────────────────────────────────
 
-function Topbar() {
+const ROLE_LABELS: Record<UserRole, string> = {
+  owner: "Владелец",
+  admin: "Администратор",
+  manager: "Менеджер",
+};
+
+function Topbar({
+  role,
+  fullName,
+  email,
+}: {
+  role: UserRole;
+  fullName: string | null;
+  email: string;
+}) {
   const pathname = usePathname();
 
   const title = (() => {
@@ -175,6 +193,13 @@ function Topbar() {
     ? "Настройки / Личный кабинет"
     : "Транспорт";
 
+  const displayName = fullName || email;
+  const initials = displayName
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("");
+
   return (
     <header className="h-14 flex items-center justify-between px-6 bg-white border-b border-gray-100 shrink-0">
       <div>
@@ -182,12 +207,12 @@ function Topbar() {
         <p className="text-[11px] text-gray-400 mt-0.5">{breadcrumb}</p>
       </div>
       <div className="flex items-center gap-3">
-        <div className="w-7 h-7 rounded-full bg-gray-900 flex items-center justify-center">
-          <span className="text-white text-[10px] font-semibold">АС</span>
+        <div className="w-7 h-7 rounded-full bg-gray-900 flex items-center justify-center shrink-0">
+          <span className="text-white text-[10px] font-semibold">{initials}</span>
         </div>
         <div className="text-right hidden sm:block">
-          <p className="text-[12px] font-medium text-gray-900">Алексей Смирнов</p>
-          <p className="text-[11px] text-gray-400">Администратор</p>
+          <p className="text-[12px] font-medium text-gray-900">{displayName}</p>
+          <p className="text-[11px] text-gray-400">{ROLE_LABELS[role]}</p>
         </div>
         <form action={logout}>
           <button

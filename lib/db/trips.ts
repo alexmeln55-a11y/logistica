@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { pool } from "@/lib/db/postgres";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -28,38 +28,48 @@ export interface CreateTripInput {
  * Возвращает список всех рейсов, отсортированных по дате создания (новые первые).
  */
 export async function getTrips(): Promise<Trip[]> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("trips")
-    .select("id, created_at, trip_number, status, date, origin, destination")
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    console.error("[getTrips]", error.message);
+  try {
+    const { rows } = await pool.query<Trip>(
+      `SELECT id,
+              created_at,
+              trip_number,
+              status,
+              date::text        AS date,
+              origin,
+              destination
+       FROM   trips
+       ORDER  BY created_at DESC`
+    );
+    return rows;
+  } catch (err) {
+    console.error("[getTrips]", err);
     return [];
   }
-
-  return (data ?? []) as Trip[];
 }
 
 /**
- * Создаёт новый рейс. Готово к использованию в Server Action или Route Handler.
+ * Создаёт новый рейс.
  */
 export async function createTrip(
   input: CreateTripInput
 ): Promise<{ data: Trip | null; error: string | null }> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("trips")
-    .insert(input)
-    .select()
-    .single();
-
-  if (error) {
-    return { data: null, error: error.message };
+  try {
+    const { rows } = await pool.query<Trip>(
+      `INSERT INTO trips (trip_number, status, date, origin, destination)
+       VALUES             ($1,          $2,     $3,   $4,     $5)
+       RETURNING id, created_at, trip_number, status, date::text AS date, origin, destination`,
+      [
+        input.trip_number,
+        input.status ?? "planned",
+        input.date ?? null,
+        input.origin,
+        input.destination,
+      ]
+    );
+    return { data: rows[0], error: null };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[createTrip]", message);
+    return { data: null, error: message };
   }
-
-  return { data: data as Trip, error: null };
 }

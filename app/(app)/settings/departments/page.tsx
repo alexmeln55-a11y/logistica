@@ -1,8 +1,8 @@
-import { requireRole } from "@/lib/supabase/profile";
+import { requireAdminAccess } from "@/lib/auth/current-user";
 import { EmptyState } from "@/components/empty-state";
 
 export default async function DepartmentsPage() {
-  await requireRole("admin");
+  await requireAdminAccess();
 
   return (
     <EmptyState
